@@ -1,0 +1,42 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+.DS_Store
+*.log
+.env
+.env.*
+coverage.xml
+htmlcov/
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Data and large artifacts
+*.npy
+*.npz
+*.pkl
+*.pt
+*.h5
+*.hdf5
+*.ckpt
+*.dat
+*.atr
+*.xws
+*.hea
+
+# Local dataset folders and generated research assets
+mit-bih-noise-stress-test-database-1.0.0/
+artifacts/
+outputs/
+checkpoints/
+wandb/
+mlruns/
+
+# Local IDE and OS files
+Thumbs.db

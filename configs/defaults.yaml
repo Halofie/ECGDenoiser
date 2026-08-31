@@ -1,0 +1,30 @@
+project: ECG-Denoise-FPGA-1DCAE
+phase: 1
+version: 0.1.0
+
+project_metadata:
+  architecture: Xilinx Zynq-7000 / Zynq UltraScale+
+  target_platform: PYNQ
+  data_source: MIT-BIH Noise Stress Test Database
+
+signal:
+  sample_rate_hz: 360
+  window_length: 256
+  snr_range_db: [-5, 15]
+  normalization: minmax
+
+model:
+  kind: 1d_autoencoder
+  quantization: int8
+  output_activation: linear
+
+training:
+  optimizer: Adam
+  learning_rate: 0.001
+  epochs: 50
+  loss: MSE
+
+fpga:
+  framework: hls4ml
+  precision: ap_fixed<16,6>
+  target_reuse_factor: configurable
