@@ -9,8 +9,8 @@ wfdb>=4.1,<5.0
 pytest>=8.0,<9.0
 
 # Planned ML / FPGA toolchain
-# torch>=2.3,<3.0
-# brevitas>=0.11,<1.0
+torch>=2.3,<3.0
+brevitas>=0.11,<1.0
 # hls4ml>=0.9,<1.0
 
 # Development tooling

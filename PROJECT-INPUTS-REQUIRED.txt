@@ -1,0 +1,262 @@
+======================================================================
+
+1. CLEAN ECG DATASET
+======================================================================
+
+1.1 Select the clean ECG source:
+[X] MIT-BIH Arrhythmia Database (mitdb)
+[ ] MIT-BIH Normal Sinus Rhythm Database (nsrdb)
+[ ] Both
+[ ] Other: ________________________________________________
+
+1.2 If using mitdb or nsrdb, provide the exact record list to use.
+Records: 100, 101, 103, 105, 106, 112, 113, 115, 117, 121, 122, 123, 200, 201, 202, 210, 212, 213, 214, 219, 220, 222, 230, 231, 233, 234
+
+1.3 May the project download missing clean records from PhysioNet?
+[X] Yes
+[ ] No; use only local files
+
+1.4 Where should downloaded or prepared clean data be stored?
+Path: c:\Users\varun\Documents\MyCode\ECGDenoiser\data\clean
+
+1.5 Which ECG channel should be used when a record has multiple channels?
+[X] MLII
+[ ] Lead I
+[ ] First available channel
+[ ] Other: ________________________________________________
+
+# ======================================================================
+2. LOCAL NOISE DATASET
+
+2.1 Noise types to include:
+[ ] EM only, as stated in the mixing formula
+[ ] Baseline wander (bw) only
+[ ] EM and baseline wander independently
+[X] EM and baseline wander combined
+[ ] Include muscle artifact (ma)
+
+2.2 If combining noise types, specify their relative weighting.
+EM weight: 0.70    BW weight: 0.30    MA weight: 0.00
+
+2.3 Should the pre-generated records such as 118e00 and 119e00 be used?
+[ ] Yes, as validation/reference data
+[ ] Yes, as training data
+[X] No; generate noisy signals dynamically
+
+2.4 Confirm the local dataset path:
+c:\Users\varun\Documents\MyCode\ECGDenoiser\mit-bih-noise-stress-test-database-1.0.0
+[X] Confirmed
+[ ] Different path: ______________________________________
+
+# ======================================================================
+3. SIGNAL PREPROCESSING
+
+3.1 Window stride:
+[ ] Non-overlapping windows: 256 samples
+[X] 50% overlap: 128 samples
+[ ] Other stride: __________ samples
+
+3.2 Handling of incomplete final windows:
+[X] Discard incomplete windows
+[ ] Zero-pad
+[ ] Reflect-pad
+[ ] Other: ________________________________________________
+
+3.3 Confirm normalization:
+Per-window min-max scaling to [-1, 1]
+[X] Confirmed
+[ ] Use another method: __________________________________
+
+3.4 Where does normalization happen for FPGA deployment?
+[X] Host/software preprocessing before FPGA inference
+[ ] Inside the FPGA preprocessing pipeline
+[ ] FPGA receives already normalized windows
+[ ] Undecided
+
+3.5 For constant-valued windows where max == min, choose behavior:
+[X] Return all zeros
+[ ] Return all -1 values
+[ ] Reject the window
+[ ] Other: ________________________________________________
+
+# ======================================================================
+4. NOISE INJECTION AND SNR
+
+4.1 Confirm target SNR range:
+Minimum: -5 dB    Maximum: 15 dB
+
+4.2 Target SNR sampling:
+[X] Uniform random sampling in dB
+[ ] Fixed SNR levels: _____________________________________
+[ ] Other distribution: ___________________________________
+
+4.3 Confirm the standard scaling formula:
+alpha = sqrt(P_clean / (P_noise * 10^(SNR_target/10)))
+[X] Confirmed
+[ ] Use another formula: _________________________________
+
+4.4 Should clean and noisy signals be normalized:
+[X] Separately per window
+[ ] Using clean-window statistics for both
+[ ] Using dataset-level statistics
+[ ] Other: ________________________________________________
+
+4.5 Randomness policy:
+[ ] Fully deterministic with a fixed seed
+[X] Deterministic training, randomized evaluation
+[ ] New random noise on every access
+[ ] Other: ________________________________________________
+
+Preferred global seed, if any: 42
+
+# ======================================================================
+5. PATIENT-LEVEL DATA SPLITS
+
+5.1 Split allocation:
+Training: 70 %    Validation: 15 %    Test: 15 %
+
+5.2 Split unit:
+[ ] Patient ID
+[X] Complete source record
+[ ] Other: ________________________________________________
+
+5.3 Confirm that all windows from one patient remain in one split:
+[X] Confirmed
+
+5.4 Should the split assignment be persisted to a manifest file?
+[X] Yes
+[ ] No
+
+5.5 Required split manifest path/name:
+c:\Users\varun\Documents\MyCode\ECGDenoiser\manifests\split_manifest.json
+
+# ======================================================================
+6. BASELINE METHODS
+
+6.1 Which conventional baselines should be included?
+[X] Moving-average baseline removal
+[X] Butterworth high-pass filter
+[X] Notch filter for power-line interference
+[X] Wavelet denoising
+[ ] Other: ________________________________________________
+
+6.2 Baselines should be evaluated on:
+[X] The same test windows as the autoencoder
+[ ] Separate benchmark data
+[ ] Both
+
+# ======================================================================
+7. AUTOENCODER ARCHITECTURE
+
+7.1 Framework:
+[X] PyTorch + Brevitas
+[ ] TensorFlow/Keras + QKeras
+
+7.2 Output activation decision (critical):
+[X] Use linear output activation to preserve negative ECG values
+[ ] Use ReLU output despite possible morphology distortion
+[ ] Change normalization/output representation
+[ ] Other: ________________________________________________
+
+7.3 Include BatchNorm1D layers?
+[X] Yes, then fold them before export
+[ ] No; omit them
+
+7.4 Use strided convolutions or MaxPool1D for encoder downsampling?
+[X] Strided Conv1D, as shown in the topology
+[ ] MaxPool1D plus convolution
+
+7.5 Confirm no skip connections are required:
+[X] Confirmed
+[ ] Add skip connections: __________________________________
+
+# ======================================================================
+8. QUANTIZATION AND NUMERICAL PRECISION
+
+8.1 Weight representation:
+[ ] Signed INT8
+[X] ap_fixed<8,1>
+[ ] Other: ________________________________________________
+
+8.2 Activation representation:
+[ ] Signed INT8
+[ ] Unsigned UINT8
+[X] ap_fixed<8,2>
+[ ] Other: ________________________________________________
+
+8.3 Accumulator width:
+[ ] 24 bit
+[X] 32 bit
+
+8.4 HLS inference precision:
+[ ] Match QAT precision exactly
+[X] ap_fixed<16,6>
+[ ] Other: ________________________________________________
+
+8.5 Quantization granularity:
+[X] Per-tensor
+[ ] Per-channel weights
+[ ] Other: ________________________________________________
+
+8.6 Calibration policy for activation ranges:
+[X] Learned during QAT
+[ ] Calibration dataset after training
+[ ] Fixed manually
+[ ] Other: ________________________________________________
+
+# ======================================================================
+9. TRAINING CONFIGURATION
+
+9.1 Optimizer:
+[X] Adam, as specified in PRD
+[ ] Other: ________________________________________________
+
+9.2 Learning rate:
+0.001
+
+9.3 Number of epochs:
+50
+
+9.4 Batch size:
+64
+
+9.5 Validation/checkpoint selection metric:
+[ ] Validation MSE
+[X] Validation PRD
+[ ] Validation SNR
+[ ] Combined metric: _____________________________________
+
+9.6 Early stopping:
+[ ] No; always train the requested number of epochs
+[X] Yes, patience: 10 epochs
+
+9.7 Hardware available for training:
+[ ] CPU only
+[X] NVIDIA GPU
+[ ] AMD GPU
+[ ] Other: ________________________________________________
+
+# ======================================================================
+10. EVALUATION AND MORPHOLOGY PRESERVATION
+
+10.1 Confirm required metrics:
+[X] MSE
+[X] Output SNR
+[X] SNR improvement relative to noisy input
+[X] PRD
+
+10.2 PRD acceptance target:
+5.0 %
+
+10.3 Add morphology-preservation checks?
+[X] Yes
+[ ] No
+
+10.4 Preferred morphology checks:
+[X] QRS peak timing error
+[X] R-peak detection agreement
+[ ] Heart-rate error
+[X] Correlation with clean ECG
+[X] Beat-level visual plots
+[ ] Other: ________________________________________________
+

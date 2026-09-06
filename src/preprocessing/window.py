@@ -51,3 +51,28 @@ def normalize_window(window: np.ndarray) -> np.ndarray:
 
     norm = 2.0 * (arr - min_val) / span - 1.0
     return norm.astype(np.float32)
+
+
+def generate_windows(
+    signal: np.ndarray,
+    length: int = 256,
+    stride: int = 128,
+    normalize: bool = True,
+) -> list[dict[str, np.ndarray | int]]:
+    """Generate contiguous windows and drop incomplete trailing samples."""
+    arr = np.asarray(signal, dtype=np.float32)
+    if arr.ndim != 1:
+        raise ValueError(f"Expected 1D signal, got shape {arr.shape}")
+    if not np.isfinite(arr).all():
+        raise ValueError("Signal contains non-finite values")
+    if length <= 0 or stride <= 0:
+        raise ValueError("length and stride must be positive")
+
+    windows: list[dict[str, np.ndarray | int]] = []
+    for start in range(0, max(0, arr.size - length + 1), stride):
+        window = extract_window(arr, start, length)
+        if normalize:
+            window = normalize_window(window)
+        validate_window_length(window, expected_length=length)
+        windows.append({"start": start, "window": window})
+    return windows

@@ -1,28 +1,75 @@
 project: ECG-Denoise-FPGA-1DCAE
 phase: 1
-version: 0.1.0
+version: 0.2.0
 
 project_metadata:
   architecture: Xilinx Zynq-7000 / Zynq UltraScale+
   target_platform: PYNQ
-  data_source: MIT-BIH Noise Stress Test Database
+  data_source: MIT-BIH Arrhythmia Database plus local nstdb noise
 
-signal:
-  sample_rate_hz: 360
-  window_length: 256
-  snr_range_db: [-5, 15]
-  normalization: minmax
+data:
+  clean:
+    database: mitdb
+    records: ["100", "101", "103", "105", "106", "112", "113", "115", "117", "121", "122", "123", "200", "201", "202", "210", "212", "213", "214", "219", "220", "222", "230", "231", "233", "234"]
+    channel: MLII
+    download_missing: true
+    path: data/clean
+  noise:
+    database: nstdb
+    path: mit-bih-noise-stress-test-database-1.0.0
+    types: [em, bw]
+    weights: {em: 0.7, bw: 0.3, ma: 0.0}
+    use_pregenerated_records: false
+  signal:
+    sample_rate_hz: 360
+    normalization: per_window_minmax_minus1_1
+    normalize_clean_and_noisy_separately: true
+  window:
+    length: 256
+    stride: 128
+    drop_incomplete: true
+  noise_injection:
+    snr_range_db: [-5.0, 15.0]
+    distribution: uniform_db
+    seed: 42
+    training_deterministic: true
+    evaluation_randomized: true
 
 model:
   kind: 1d_autoencoder
-  quantization: int8
+  framework: pytorch_brevitas
+  weight_precision: ap_fixed<8,1>
+  activation_precision: ap_fixed<8,2>
+  accumulator_bits: 32
+  quantization_granularity: per_tensor
+  activation_calibration: learned_during_qat
   output_activation: linear
+  batch_norm: true
+  downsampling: strided_conv1d
+  skip_connections: false
+
+splits:
+  fractions: {train: 0.7, validation: 0.15, test: 0.15}
+  unit: source_record
+  patient_grouping: true
+  seed: 42
+  manifest: manifests/split_manifest.json
 
 training:
   optimizer: Adam
   learning_rate: 0.001
-  epochs: 50
+  batch_size: 64
+  max_epochs: 50
+  early_stopping: {enabled: true, patience: 10}
+  checkpoint_metric: validation_prd
   loss: MSE
+
+evaluation:
+  metrics: [mse, output_snr, snr_improvement, prd]
+  prd_target_percent: 5.0
+  morphology_checks: [qrs_peak_timing_error, r_peak_agreement, correlation, beat_plots]
+  baselines: [moving_average, butterworth_highpass, notch, wavelet]
+  baseline_split: test
 
 fpga:
   framework: hls4ml

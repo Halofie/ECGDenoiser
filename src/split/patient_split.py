@@ -31,6 +31,8 @@ def split_by_patient(
         raise ValueError("val_fraction must be in [0, 1)")
     if not 0.0 <= test_fraction < 1.0:
         raise ValueError("test_fraction must be in [0, 1)")
+    if val_fraction + test_fraction > 1.0:
+        raise ValueError("val_fraction + test_fraction must not exceed 1")
 
     unique_records = sorted(set(records))
     patient_groups: dict[str, list[str]] = {}

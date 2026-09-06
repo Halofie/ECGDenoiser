@@ -12,11 +12,12 @@ def test_repo_structure_exists():
 
 
 def test_default_config_loads():
-    from src.config import load_config
+    from src.config import load_config, validate_config
 
     root = Path(__file__).resolve().parents[1]
     config = load_config(root / "configs" / "defaults.yaml")
 
     assert config["project"] == "ECG-Denoise-FPGA-1DCAE"
-    assert config["signal"]["window_length"] == 256
+    assert config["data"]["window"]["length"] == 256
     assert config["training"]["learning_rate"] == 0.001
+    validate_config(config)
