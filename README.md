@@ -19,3 +19,21 @@ Current milestone: Phase 1 — project structure and environment setup.
 
 ## Status
 This repository currently includes the project specification and the initial Phase 1 engineering scaffold only.
+
+## Waveform visualizer
+Run the local model-backed dashboard from the project root:
+
+```bash
+python scripts/visualizer.py
+```
+
+Open http://127.0.0.1:8000 in a browser. The dashboard loads deterministic windows from the test split, runs the checkpoint in `checkpoints/best_model.pt`, and shows the noisy input, denoised output, clean reference, residual noise, and per-window metrics. Use `--config`, `--checkpoint`, or `--port` to point it at another experiment.
+
+Training progress can be written while an experiment runs:
+
+```powershell
+python scripts/train_model.py --epochs 60 --checkpoint checkpoints/model_60_epochs.pt --progress runs/model_60_epochs_progress.json
+Get-Content runs/model_60_epochs_progress.json -Wait
+```
+
+The progress file is updated after every completed epoch with `completed_epochs`, `total_epochs`, the latest losses, and the best validation PRD.

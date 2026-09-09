@@ -1,0 +1,12 @@
+{
+  "checkpoint": "checkpoints/model_60_epochs.pt",
+  "checkpoint_epoch": 17,
+  "test_windows": 20308,
+  "mean_input_mse": 0.15422263317132706,
+  "mean_output_mse": 0.09062096208927464,
+  "mean_input_prd": 66.99134995139563,
+  "mean_output_prd": 52.94487403021695,
+  "mean_output_snr_db": 8.777256250254123,
+  "mse_reduction_percent": 41.24016674737803,
+  "prd_reduction_percent": 20.967596460393544
+}

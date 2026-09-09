@@ -28,7 +28,13 @@ def set_seed(seed: int) -> None:
         torch.cuda.manual_seed_all(seed)
 
 
-def train_from_config(config_path: str | Path, checkpoint_path: str | Path) -> list[dict]:
+def train_from_config(
+    config_path: str | Path,
+    checkpoint_path: str | Path,
+    epochs: int | None = None,
+    progress_path: str | Path | None = None,
+    disable_early_stopping: bool = False,
+) -> list[dict]:
     """Build configured datasets and train the quantized autoencoder."""
     config_path = Path(config_path)
     root = config_path.resolve().parents[1]
@@ -75,9 +81,10 @@ def train_from_config(config_path: str | Path, checkpoint_path: str | Path) -> l
         validation_loader,
         TrainingConfig(
             learning_rate=training["learning_rate"],
-            epochs=training["max_epochs"],
+            epochs=epochs if epochs is not None else training["max_epochs"],
             device="cuda",
-            early_stopping_patience=training["early_stopping"]["patience"],
+            early_stopping_patience=None if disable_early_stopping else training["early_stopping"]["patience"],
+            progress_path=progress_path,
         ),
         checkpoint_path=checkpoint_path,
     )
@@ -87,8 +94,17 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", default="configs/defaults.yaml")
     parser.add_argument("--checkpoint", default="checkpoints/best_model.pt")
+    parser.add_argument("--epochs", type=int, default=None, help="Override configured epoch count for an isolated experiment")
+    parser.add_argument("--progress", default=None, help="Write live epoch progress JSON to this path")
+    parser.add_argument("--disable-early-stopping", action="store_true", help="Run every requested epoch")
     args = parser.parse_args()
-    history = train_from_config(args.config, args.checkpoint)
+    history = train_from_config(
+        args.config,
+        args.checkpoint,
+        epochs=args.epochs,
+        progress_path=args.progress,
+        disable_early_stopping=args.disable_early_stopping,
+    )
     print(f"Completed epochs: {len(history)}")
     print(f"Best validation PRD: {min(row['validation_prd'] for row in history):.4f}")
 

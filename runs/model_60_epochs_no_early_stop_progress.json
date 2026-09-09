@@ -1,0 +1,12 @@
+{
+  "status": "running",
+  "completed_epochs": 12,
+  "total_epochs": 60,
+  "latest": {
+    "epoch": 12,
+    "train_mse": 0.0677218389819984,
+    "validation_mse": 0.07879053994591506,
+    "validation_prd": 41.418247672746766
+  },
+  "best_validation_prd": 39.19862304543549
+}

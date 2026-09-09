@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ECG Denoiser / Signal Lab</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="masthead">
+      <div>
+        <p class="eyebrow">ECG DENOISER / MODEL INSPECTOR</p>
+        <h1>Signal lab<span>.</span></h1>
+        <p class="lede">See what the autoencoder removes, preserves, and leaves behind.</p>
+      </div>
+      <div class="status" id="status"><i></i><span id="status-text">Connecting to model</span></div>
+    </header>
+
+    <section class="toolbar" aria-label="Sample controls">
+      <button class="icon-button" id="previous" title="Previous window" aria-label="Previous window">←</button>
+      <label class="sample-picker">WINDOW <input id="sample-index" type="number" min="0" value="0"><span id="sample-total">/ —</span></label>
+      <button class="icon-button" id="next" title="Next window" aria-label="Next window">→</button>
+      <div class="toolbar-rule"></div>
+      <span class="record-label">RECORD <strong id="record">—</strong></span>
+      <span class="record-label">OFFSET <strong id="offset">—</strong></span>
+    </section>
+
+    <section class="training-progress" aria-label="Training progress">
+      <div class="progress-copy"><p class="eyebrow">LIVE TRAINING</p><strong id="training-status">Waiting for trainer</strong></div>
+      <div class="progress-track"><span id="training-bar"></span></div>
+      <span class="progress-count" id="training-count">0 / 60 epochs</span>
+    </section>
+
+    <section class="signal-stage">
+      <div class="stage-heading"><div><p class="eyebrow">WINDOW VIEW / 256 SAMPLES</p><h2>Waveform comparison</h2></div><span id="snr-badge" class="snr-badge">SNR — dB</span></div>
+      <div class="legend"><span><i class="swatch input"></i>Input / noisy</span><span><i class="swatch output"></i>Denoised output</span><span><i class="swatch target"></i>Clean reference</span></div>
+      <div class="chart-wrap"><canvas id="waveform" aria-label="Waveform comparison chart"></canvas><div class="axis-y"><span>+1</span><span>0</span><span>-1</span></div><div class="axis-x"><span>0 ms</span><span id="duration">— ms</span></div></div>
+    </section>
+
+    <section class="insight-grid">
+      <article class="metric-card"><p class="eyebrow">INPUT DISTORTION</p><strong id="input-prd">—</strong><span>PRD % vs clean reference</span></article>
+      <article class="metric-card accent"><p class="eyebrow">OUTPUT DISTORTION</p><strong id="output-prd">—</strong><span>PRD % vs clean reference</span></article>
+      <article class="metric-card"><p class="eyebrow">MODEL ERROR</p><strong id="mse">—</strong><span>mean squared error</span></article>
+      <article class="residual-card"><div><p class="eyebrow">WHAT REMAINS</p><h3>Residual noise</h3><span>Input minus denoised output</span></div><canvas id="residual" aria-label="Residual noise chart"></canvas></article>
+    </section>
+    <footer><span>Normalized per window · 360 Hz sample rate</span><span id="loading">Ready</span></footer>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>

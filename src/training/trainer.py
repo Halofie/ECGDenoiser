@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from pathlib import Path
 
 import numpy as np
@@ -16,6 +17,17 @@ class TrainingConfig:
     epochs: int = 1
     device: str = "auto"
     early_stopping_patience: int | None = None
+    progress_path: str | Path | None = None
+
+
+def _write_progress(path: str | Path | None, payload: dict) -> None:
+    if path is None:
+        return
+    destination = Path(path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_suffix(destination.suffix + ".tmp")
+    temporary.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    temporary.replace(destination)
 
 
 def train_step(cfg: TrainingConfig, batch_x: np.ndarray, batch_y: np.ndarray) -> tuple[float, int]:
@@ -110,6 +122,7 @@ def fit(
     history: list[dict[str, float | int]] = []
     best_validation_prd = float("inf")
     stale_epochs = 0
+    _write_progress(config.progress_path, {"status": "running", "completed_epochs": 0, "total_epochs": config.epochs})
 
     for epoch in range(1, config.epochs + 1):
         print(f"Epoch {epoch}/{config.epochs} starting on {device}", flush=True)
@@ -127,6 +140,16 @@ def fit(
             f"validation_mse={validation_mse:.6f} validation_prd={validation_prd:.4f}",
             flush=True,
         )
+        _write_progress(
+            config.progress_path,
+            {
+                "status": "running" if epoch < config.epochs else "completed",
+                "completed_epochs": epoch,
+                "total_epochs": config.epochs,
+                "latest": row,
+                "best_validation_prd": best_validation_prd,
+            },
+        )
 
         if validation_prd < best_validation_prd:
             best_validation_prd = validation_prd
@@ -138,5 +161,15 @@ def fit(
         else:
             stale_epochs += 1
             if config.early_stopping_patience is not None and stale_epochs >= config.early_stopping_patience:
+                _write_progress(
+                    config.progress_path,
+                    {
+                        "status": "early_stopped",
+                        "completed_epochs": epoch,
+                        "total_epochs": config.epochs,
+                        "latest": row,
+                        "best_validation_prd": best_validation_prd,
+                    },
+                )
                 break
     return history
