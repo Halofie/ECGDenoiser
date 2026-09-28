@@ -11,6 +11,13 @@ def test_quant_conv1d_preserves_signal_length_for_same_padding():
     assert tuple(y.shape) == (1, 16, 128)
 
 
+def test_quant_conv1d_same_length_path_preserves_window_size():
+    layer = QuantConv1D(in_channels=1, out_channels=16, kernel_size=7, padding=3)
+    x = torch.randn(1, 1, 256)
+    y = layer(x)
+    assert tuple(y.shape) == (1, 16, 256)
+
+
 def test_quant_relu_is_signed_and_finite():
     x = torch.tensor([[-1.0, 0.0, 2.0]])
     y = QuantReLU()(x)

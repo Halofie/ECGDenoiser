@@ -26,7 +26,7 @@ set_property target_language Verilog [current_project]
 
 create_bd_design $BD_NAME
 
-create_bd_cell -type ip -vlnv xilinx.com:ip:zynq_ultra_ps_e:3.5 zynq_ultra_ps_e_0
+create_bd_cell -type ip -vlnv xilinx.com:ip:zynq_ultra_ps_e:3.3 zynq_ultra_ps_e_0
 set_property -dict [list \
     CONFIG.PSU__USE__M_AXI_GP0 {1} \
     CONFIG.PSU__USE__S_AXI_GP2 {0} \
@@ -48,7 +48,7 @@ create_bd_cell -type ip -vlnv xilinx.com:ip:smartconnect:1.0 axi_ctrl_interconne
 set_property CONFIG.NUM_SI {1} [get_bd_cells axi_ctrl_interconnect]
 set_property CONFIG.NUM_MI {2} [get_bd_cells axi_ctrl_interconnect]
 
-create_bd_cell -type ip -vlnv xilinx.com:ip:proc_sys_reset:5.1 proc_sys_reset_0
+create_bd_cell -type ip -vlnv xilinx.com:ip:proc_sys_reset:5.0 proc_sys_reset_0
 create_bd_cell -type ip -vlnv $HLS_IP_VLNV ecg_denoiser_0
 
 connect_bd_net [get_bd_pins zynq_ultra_ps_e_0/pl_clk0] \

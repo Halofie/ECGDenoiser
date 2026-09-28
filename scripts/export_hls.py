@@ -19,11 +19,10 @@ class StaticInferenceWrapper(nn.Module):
 
     def __init__(self, model: ECGDenoiseAutoencoder):
         super().__init__()
-        self.encoder = model.encoder
-        self.decoder = model.decoder
+        self.layers = model.layers
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        return self.decoder(self.encoder(inputs))
+        return self.layers(inputs)
 
 
 def load_checkpoint(path: Path) -> ECGDenoiseAutoencoder:
@@ -95,7 +94,7 @@ def convert_pytorch_to_hls(
     precision: str,
     io_type: str,
 ) -> None:
-    """Convert the stripped PyTorch inference graph into Vitis HLS."""
+    """Convert the stripped PyTorch inference graph into Vivado HLS."""
     try:
         import hls4ml
     except ModuleNotFoundError as error:
@@ -106,17 +105,22 @@ def convert_pytorch_to_hls(
 
     hls_config = hls4ml.utils.config_from_pytorch_model(
         model,
-        input_shape=(1, 256),
-        granularity="name",
-        backend="Vitis",
+        granularity="layer",
+        backend="Vivado",
         default_precision=precision,
+        inputs_channel_last=True,
+        transpose_outputs=False,
     )
     hls_model = hls4ml.converters.convert_from_pytorch_model(
         model,
+        input_shape=(None, 1, 256),
         output_dir=str(output_dir),
-        io_type=io_type,
-        backend="Vitis",
+        project_name="ecg_denoiser",
+        backend="Vivado",
         hls_config=hls_config,
+        io_type=io_type,
+        part="xczu7ev-ffvc1156-2-e",
+        clock_period=5,
     )
     hls_model.write()
     print(f"Generated HLS project at {output_dir}")
@@ -124,12 +128,12 @@ def convert_pytorch_to_hls(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Export the trained ECG denoiser through ONNX to Vitis HLS."
+        description="Export the trained ECG denoiser through ONNX to Vivado HLS."
     )
     parser.add_argument("--checkpoint", default="checkpoints/best_model.pt", type=Path)
     parser.add_argument("--onnx", default="artifacts/ecg_denoiser.onnx", type=Path)
     parser.add_argument("--output-dir", default="artifacts/ecg_denoiser_hls", type=Path)
-    parser.add_argument("--precision", default="fixed<16,6>")
+    parser.add_argument("--precision", default="ap_fixed<16,6>")
     parser.add_argument("--io-type", choices=("io_stream", "io_parallel"), default="io_stream")
     args = parser.parse_args()
 

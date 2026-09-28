@@ -45,7 +45,9 @@ model:
   activation_calibration: learned_during_qat
   output_activation: linear
   batch_norm: true
-  downsampling: strided_conv1d
+  downsampling: none
+  spatial_length: 256
+  architecture: same_length_conv_bottleneck
   skip_connections: false
 
 splits:

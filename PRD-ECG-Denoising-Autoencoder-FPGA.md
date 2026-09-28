@@ -46,31 +46,30 @@ To ensure the generated neural network is synthesizable on Xilinx/PYNQ FPGA arch
 ## 4. Model Architecture (1D-CAE with QAT)
 
 ### 4.1 Topology Map
-The architecture must be implemented using **Brevitas** (PyTorch) or **QKeras** (TensorFlow/Keras).
+The architecture must be implemented using **Brevitas** (PyTorch) or **QKeras** (TensorFlow/Keras). For Vivado HLS 2019.1, the deployment model uses only operators supported by the legacy hls4ml PyTorch frontend. The model must be retrained from scratch after this architecture change.
 
 ```
 Input Vector (1 x 256)
   │
-  ├── [QuantConv1D]  16 Filters, Kernel=7, Stride=2, Padding=3  ──► (16 x 128)
+  ├── [QuantConv1D]  16 Filters, Kernel=7, Stride=1, Padding=3  ──► (16 x 256)
   ├── [QuantReLU]
   │
-  ├── [QuantConv1D]  32 Filters, Kernel=5, Stride=2, Padding=2  ──► (32 x 64)
+  ├── [QuantConv1D]  32 Filters, Kernel=5, Stride=1, Padding=2  ──► (32 x 256)
   ├── [QuantReLU]
   │
-  ├── [QuantConv1D]  32 Filters, Kernel=3, Stride=2, Padding=1  ──► (32 x 32)
-  ├── [QuantReLU]  ─── [ BOTTLENECK: 32 Channels x 32 Spatial ]
+  ├── [QuantConv1D]  32 Filters, Kernel=3, Stride=1, Padding=1  ──► (32 x 256)
+  ├── [QuantReLU]  ─── [ BOTTLENECK: 32 Channels x 256 Spatial ]
   │
-  ├── [UpSample1D]   Scale Factor = 2                          ──► (32 x 64)
-  ├── [QuantConv1D]  32 Filters, Kernel=3, Stride=1, Padding=1
+  ├── [QuantConv1D]  16 Filters, Kernel=3, Stride=1, Padding=1  ──► (16 x 256)
   ├── [QuantReLU]
   │
-  ├── [UpSample1D]   Scale Factor = 2                          ──► (32 x 128)
-  ├── [QuantConv1D]  16 Filters, Kernel=5, Stride=1, Padding=2
+  ├── [QuantConv1D]  8 Filters, Kernel=5, Stride=1, Padding=2   ──► (8 x 256)
   ├── [QuantReLU]
   │
-  ├── [UpSample1D]   Scale Factor = 2                          ──► (16 x 256)
   ├── [QuantConv1D]  1 Filter,   Kernel=7, Stride=1, Padding=3  ──► Output (1 x 256)
 ```
+
+All layers preserve the 256-sample spatial length. The architecture intentionally avoids strided convolution, upsampling, dynamic shape operations, and skip connections because these are not supported reliably by the Vivado HLS 2019.1 hls4ml frontend.
 
 ### 4.2 Quantization Specifications
 * **Weight Quantization:** 8-bit signed integer (`int8` / `ap_fixed<8,1>`).

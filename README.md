@@ -41,11 +41,11 @@ The progress file is updated after every completed epoch with `completed_epochs`
 ## HLS export
 
 HLS export requires an ONNX/hls4ml/QONNX toolchain in addition to the base
-Python requirements. Install versions compatible with the installed Vitis
+Python requirements. Install versions compatible with Vivado HLS 2019.1
 release, then export a trained checkpoint:
 
 ```powershell
-python -m pip install onnx qonnx hls4ml
+python -m pip install "onnx>=1.16,<1.18" qonnx "hls4ml==0.8.1"
 python scripts/export_hls.py `
   --checkpoint checkpoints/best_model.pt `
   --onnx artifacts/ecg_denoiser.onnx `
@@ -54,11 +54,16 @@ python scripts/export_hls.py `
 
 The exporter uses a static `(1, 1, 256)` input, writes an ONNX intermediate,
 strips Brevitas-only quantizer wrappers for the hls4ml PyTorch front end, and
-generates a Vitis HLS project. Conversion errors are surfaced for missing
+generates a Vivado HLS 2019.1 project targeting the ZCU104 part. Conversion errors are surfaced for missing
 packages or unsupported operators; the generated project must still pass HLS
 C simulation and synthesis before Vivado integration. The generated HLS graph
 uses the trained convolution weights, but its fixed-point behavior must be
 compared against the quantized PyTorch reference before hardware sign-off.
+
+The deployment architecture is a same-length six-convolution denoiser because
+the legacy hls4ml frontend does not support the original upsampling layers.
+Existing checkpoints are incompatible with this architecture; retrain from
+scratch before running the exporter.
 
 Create calibration directly from the configured WFDB records with:
 
