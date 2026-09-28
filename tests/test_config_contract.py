@@ -24,6 +24,8 @@ def test_answered_project_configuration_is_complete():
     assert config["splits"]["fractions"] == {"train": 0.7, "validation": 0.15, "test": 0.15}
     assert config["model"]["framework"] == "pytorch_brevitas"
     assert config["training"]["batch_size"] == 64
+    assert config["fpga"]["deployment_input"]["normalization"] == "fixed_affine_minus1_1"
+    assert config["fpga"]["deployment_input"]["sample_format"] == "int16"
 
 
 def test_invalid_split_fractions_are_rejected():

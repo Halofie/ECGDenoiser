@@ -1,0 +1,12 @@
+{
+  "status": "early_stopped",
+  "completed_epochs": 27,
+  "total_epochs": 50,
+  "latest": {
+    "epoch": 27,
+    "train_mse": 0.06577191851688784,
+    "validation_mse": 0.0709032783718229,
+    "validation_prd": 38.903223187668516
+  },
+  "best_validation_prd": 38.671545310590254
+}

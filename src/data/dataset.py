@@ -9,7 +9,13 @@ import wfdb
 from torch.utils.data import DataLoader, Dataset
 
 from src.noise.noise_mix import mix_clean_and_noise
-from src.preprocessing.window import extract_window, generate_windows, normalize_window
+from src.fpga.deployment import InputCalibration
+from src.preprocessing.window import (
+    extract_window,
+    generate_windows,
+    normalize_fixed_affine,
+    normalize_window,
+)
 
 
 def load_noise_record(record_path: str | Path) -> dict[str, Any]:
@@ -78,6 +84,7 @@ class ECGDenoisingDataset(Dataset):
         window_stride: int = 128,
         seed: int = 42,
         deterministic: bool = True,
+        calibration: InputCalibration | None = None,
     ):
         if snr_range_db[0] > snr_range_db[1]:
             raise ValueError("snr_range_db must be ordered as (minimum, maximum)")
@@ -88,6 +95,7 @@ class ECGDenoisingDataset(Dataset):
         self.snr_range_db = snr_range_db
         self.seed = seed
         self.deterministic = deterministic
+        self.calibration = calibration
         self._samples: list[dict[str, Any]] = []
 
         for record in clean_records:
@@ -123,8 +131,16 @@ class ECGDenoisingDataset(Dataset):
         target_snr = float(rng.uniform(*self.snr_range_db))
         noisy_raw, alpha = mix_clean_and_noise(clean_raw, noise, target_snr)
 
-        clean = normalize_window(clean_raw)
-        noisy = normalize_window(noisy_raw)
+        if self.calibration is None:
+            clean = normalize_window(clean_raw)
+            noisy = normalize_window(noisy_raw)
+        else:
+            clean = normalize_fixed_affine(
+                clean_raw, self.calibration.offset, self.calibration.scale
+            )
+            noisy = normalize_fixed_affine(
+                noisy_raw, self.calibration.offset, self.calibration.scale
+            )
         metadata = {
             "record": sample["record"],
             "start": start,

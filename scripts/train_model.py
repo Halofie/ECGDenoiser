@@ -14,6 +14,7 @@ sys.path.insert(0, str(ROOT))
 from src.config import load_config, validate_config
 from src.data.dataset import ECGDenoisingDataset, create_dataloader, load_noise_records
 from src.data.fetch_dataset import load_clean_record
+from src.fpga.deployment import load_calibration
 from src.models.quant_autoencoder import ECGDenoiseAutoencoder
 from src.split.manifest import load_split_manifest
 from src.training.trainer import TrainingConfig, fit
@@ -54,6 +55,8 @@ def train_from_config(
     manifest = load_split_manifest(root / config["splits"]["manifest"])
     noise_config = config["data"]["noise"]
     noise_records = load_noise_records(root / noise_config["path"], noise_config["types"])
+    calibration_path = root / config["fpga"]["deployment_input"]["calibration_artifact"]
+    calibration = load_calibration(calibration_path)
     weights = noise_config["weights"]
     window = config["data"]["window"]
     snr_range = tuple(config["data"]["noise_injection"]["snr_range_db"])
@@ -69,12 +72,14 @@ def train_from_config(
             window_stride=window["stride"],
             seed=seed,
             deterministic=split_name != "test",
+            calibration=calibration,
         )
 
     batch_size = config["training"]["batch_size"]
     train_loader = create_dataloader(datasets["train"], batch_size, shuffle=True)
     validation_loader = create_dataloader(datasets["validation"], batch_size, shuffle=False)
     training = config["training"]
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     return fit(
         ECGDenoiseAutoencoder(),
         train_loader,
@@ -82,7 +87,7 @@ def train_from_config(
         TrainingConfig(
             learning_rate=training["learning_rate"],
             epochs=epochs if epochs is not None else training["max_epochs"],
-            device="cuda",
+            device=device,
             early_stopping_patience=None if disable_early_stopping else training["early_stopping"]["patience"],
             progress_path=progress_path,
         ),

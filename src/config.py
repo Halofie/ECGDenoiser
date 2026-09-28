@@ -60,3 +60,22 @@ def validate_config(config: dict) -> None:
         raise ConfigError("Training must use batch size 64 and maximum 50 epochs")
     if training["early_stopping"]["patience"] != 10 or training["checkpoint_metric"] != "validation_prd":
         raise ConfigError("Training must select by validation PRD with patience 10")
+
+    fpga = config["fpga"]
+    deployment_input = fpga.get("deployment_input")
+    if not isinstance(deployment_input, dict):
+        raise ConfigError("The FPGA deployment input contract is required")
+    if deployment_input.get("normalization") != "fixed_affine_minus1_1":
+        raise ConfigError("FPGA input normalization must use fixed affine scaling to [-1, 1]")
+    if deployment_input.get("calibration_artifact") != "artifacts/input_calibration.json":
+        raise ConfigError("The FPGA calibration artifact path is fixed by the deployment contract")
+    if deployment_input.get("sample_format") != "int16" or deployment_input.get("output_format") != "int16":
+        raise ConfigError("The FPGA UART contract requires int16 input and output samples")
+    if deployment_input.get("sample_rate_hz") != 360 or deployment_input.get("window_length") != 256:
+        raise ConfigError("The FPGA input contract requires 360 Hz and 256-sample windows")
+    if deployment_input.get("window_stride") != 128:
+        raise ConfigError("The FPGA input contract requires a 128-sample window stride")
+    if deployment_input.get("uart_baud_rate") != 115200:
+        raise ConfigError("The FPGA UART contract requires 115200 baud")
+    if deployment_input.get("packet_crc") != "crc32":
+        raise ConfigError("The FPGA UART contract requires CRC32 packet validation")

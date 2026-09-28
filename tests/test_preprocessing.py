@@ -1,6 +1,12 @@
 import numpy as np
+import pytest
 
-from src.preprocessing.window import extract_window, normalize_window, validate_window_length
+from src.preprocessing.window import (
+    extract_window,
+    normalize_fixed_affine,
+    normalize_window,
+    validate_window_length,
+)
 
 
 def test_validate_window_length_accepts_exact_256_samples():
@@ -30,3 +36,14 @@ def test_normalize_window_maps_to_minus_one_to_one():
     assert norm.shape == arr.shape
     assert np.min(norm) >= -1.0 - 1e-6
     assert np.max(norm) <= 1.0 + 1e-6
+
+
+def test_normalize_fixed_affine_uses_shared_calibration_and_clips():
+    arr = np.array([-3.0, 0.0, 3.0], dtype=np.float32)
+    norm = normalize_fixed_affine(arr, offset=0.0, scale=2.0)
+    assert np.allclose(norm, [-1.0, 0.0, 1.0])
+
+
+def test_normalize_fixed_affine_rejects_non_positive_scale():
+    with pytest.raises(ValueError, match="scale must be positive"):
+        normalize_fixed_affine(np.array([1.0], dtype=np.float32), offset=0.0, scale=0.0)

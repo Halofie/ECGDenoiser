@@ -1,0 +1,12 @@
+{
+  "status": "completed",
+  "completed_epochs": 1,
+  "total_epochs": 1,
+  "latest": {
+    "epoch": 1,
+    "train_mse": 0.08167421086286965,
+    "validation_mse": 0.07973687614917567,
+    "validation_prd": 42.05808216070979
+  },
+  "best_validation_prd": Infinity
+}

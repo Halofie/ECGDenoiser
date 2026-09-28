@@ -53,6 +53,29 @@ def normalize_window(window: np.ndarray) -> np.ndarray:
     return norm.astype(np.float32)
 
 
+def normalize_fixed_affine(
+    signal: np.ndarray,
+    offset: float,
+    scale: float,
+) -> np.ndarray:
+    """Normalize samples with deployment calibration shared by training and FPGA.
+
+    ``offset`` and ``scale`` are calibration values computed from the training
+    data. A scale of zero is invalid because it would make the hardware input
+    undefined.
+    """
+    arr = np.asarray(signal, dtype=np.float32)
+    if arr.ndim != 1:
+        raise ValueError(f"Expected 1D signal, got shape {arr.shape}")
+    if not np.isfinite(arr).all():
+        raise ValueError("Signal contains non-finite values")
+    if not np.isfinite(offset) or not np.isfinite(scale) or scale <= 0.0:
+        raise ValueError("offset must be finite and scale must be positive")
+    return np.clip((arr - np.float32(offset)) / np.float32(scale), -1.0, 1.0).astype(
+        np.float32
+    )
+
+
 def generate_windows(
     signal: np.ndarray,
     length: int = 256,

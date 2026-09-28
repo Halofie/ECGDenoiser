@@ -75,3 +75,13 @@ fpga:
   framework: hls4ml
   precision: ap_fixed<16,6>
   target_reuse_factor: configurable
+  deployment_input:
+    normalization: fixed_affine_minus1_1
+    calibration_artifact: artifacts/input_calibration.json
+    sample_format: int16
+    sample_rate_hz: 360
+    window_length: 256
+    window_stride: 128
+    output_format: int16
+    uart_baud_rate: 115200
+    packet_crc: crc32
