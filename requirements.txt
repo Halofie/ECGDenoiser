@@ -11,11 +11,11 @@ pytest>=8.0,<9.0
 # Planned ML / FPGA toolchain
 torch>=2.3,<3.0
 brevitas>=0.11,<1.0
-# FPGA export is installed separately because Vivado HLS 2019.1 and QONNX versions are platform-specific.
+# FPGA export is installed separately because Vitis HLS 2023.2 and QONNX versions are platform-specific.
 # A compatible host stack for the current project constraints is:
 # onnx>=1.16,<1.18
 # qonnx==1.0.0
-# hls4ml==0.8.1
+# hls4ml==0.8.1 (backend="Vitis"; Vivado HLS was retired after 2019.x, so 2023.2 requires the Vitis backend)
 # h5py>=3.11,<3.12
 
 # Development tooling

@@ -1,0 +1,8 @@
+{
+    "lib": "libvart-dpu-runner.so",
+    "filename": "ecg_denoiser.xmodel",
+    "kernel": [
+        "subgraph_ECGResUNet1D__ECGResUNet1D_Conv2d_head__ret"
+    ],
+    "target": "DPUCZDX8G_ISA1_B4096"
+}

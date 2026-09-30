@@ -46,7 +46,7 @@ To ensure the generated neural network is synthesizable on Xilinx/PYNQ FPGA arch
 ## 4. Model Architecture (1D-CAE with QAT)
 
 ### 4.1 Topology Map
-The architecture must be implemented using **Brevitas** (PyTorch) or **QKeras** (TensorFlow/Keras). For Vivado HLS 2019.1, the deployment model uses only operators supported by the legacy hls4ml PyTorch frontend. The model must be retrained from scratch after this architecture change.
+The architecture must be implemented using **Brevitas** (PyTorch) or **QKeras** (TensorFlow/Keras). For Vitis HLS 2023.2, the deployment model uses only operators supported by the hls4ml PyTorch frontend. The model must be retrained from scratch after this architecture change.
 
 ```
 Input Vector (1 x 256)
@@ -69,7 +69,7 @@ Input Vector (1 x 256)
   ├── [QuantConv1D]  1 Filter,   Kernel=7, Stride=1, Padding=3  ──► Output (1 x 256)
 ```
 
-All layers preserve the 256-sample spatial length. The architecture intentionally avoids strided convolution, upsampling, dynamic shape operations, and skip connections because these are not supported reliably by the Vivado HLS 2019.1 hls4ml frontend.
+All layers preserve the 256-sample spatial length. The architecture intentionally avoids strided convolution, upsampling, dynamic shape operations, and skip connections because these are not supported reliably by the Vitis HLS 2023.2 hls4ml frontend.
 
 ### 4.2 Quantization Specifications
 * **Weight Quantization:** 8-bit signed integer (`int8` / `ap_fixed<8,1>`).

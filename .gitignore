@@ -32,12 +32,17 @@ htmlcov/
 *.hea
 
 # Local dataset folders and generated research assets
-mit-bih-noise-stress-test-database-1.0.0/
 artifacts/
 outputs/
 checkpoints/
 wandb/
 mlruns/
+
+# Dataset intentionally tracked in this repo
+!mit-bih-noise-stress-test-database-1.0.0/
+!mit-bih-noise-stress-test-database-1.0.0/**
+!data/clean/
+!data/clean/**
 
 # Local IDE and OS files
 Thumbs.db

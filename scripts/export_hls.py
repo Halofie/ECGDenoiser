@@ -94,7 +94,12 @@ def convert_pytorch_to_hls(
     precision: str,
     io_type: str,
 ) -> None:
-    """Convert the stripped PyTorch inference graph into Vivado HLS."""
+    """Convert the stripped PyTorch inference graph into Vitis HLS.
+
+    Vivado HLS was retired after the 2019.x line; Vivado/Vitis 2023.2 only
+    ships Vitis HLS, so hls4ml must target the "Vitis" backend rather than
+    the legacy "Vivado" backend.
+    """
     try:
         import hls4ml
     except ModuleNotFoundError as error:
@@ -106,7 +111,7 @@ def convert_pytorch_to_hls(
     hls_config = hls4ml.utils.config_from_pytorch_model(
         model,
         granularity="layer",
-        backend="Vivado",
+        backend="Vitis",
         default_precision=precision,
         inputs_channel_last=True,
         transpose_outputs=False,
@@ -116,7 +121,7 @@ def convert_pytorch_to_hls(
         input_shape=(None, 1, 256),
         output_dir=str(output_dir),
         project_name="ecg_denoiser",
-        backend="Vivado",
+        backend="Vitis",
         hls_config=hls_config,
         io_type=io_type,
         part="xczu7ev-ffvc1156-2-e",

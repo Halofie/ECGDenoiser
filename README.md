@@ -41,7 +41,7 @@ The progress file is updated after every completed epoch with `completed_epochs`
 ## HLS export
 
 HLS export requires an ONNX/hls4ml/QONNX toolchain in addition to the base
-Python requirements. Install versions compatible with Vivado HLS 2019.1
+Python requirements. Install versions compatible with the Vitis HLS 2023.2
 release, then export a trained checkpoint:
 
 ```powershell
@@ -54,7 +54,9 @@ python scripts/export_hls.py `
 
 The exporter uses a static `(1, 1, 256)` input, writes an ONNX intermediate,
 strips Brevitas-only quantizer wrappers for the hls4ml PyTorch front end, and
-generates a Vivado HLS 2019.1 project targeting the ZCU104 part. Conversion errors are surfaced for missing
+generates a Vitis HLS 2023.2 project (hls4ml `backend="Vitis"`) targeting the
+ZCU104 part. Vivado HLS was retired after the 2019.x line, so 2023.2 only
+ships Vitis HLS. Conversion errors are surfaced for missing
 packages or unsupported operators; the generated project must still pass HLS
 C simulation and synthesis before Vivado integration. The generated HLS graph
 uses the trained convolution weights, but its fixed-point behavior must be

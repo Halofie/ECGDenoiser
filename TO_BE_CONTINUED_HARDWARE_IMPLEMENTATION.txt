@@ -1,10 +1,10 @@
 ECG DENOISER FPGA IMPLEMENTATION
 TO BE CONTINUED - HARDWARE READINESS AND RETRAINING CHECKLIST
 
-Date of last work: 2026-09-28
+Date of last work: 2026-09-29
 Target board: Xilinx ZCU104
 Target device: xczu7ev-ffvc1156-2-e
-Installed FPGA tool: Vivado 2019.1 / Vivado HLS 2019.1
+Installed FPGA tool: Vivado 2023.2 / Vitis HLS 2023.2
 Repository: ECGDenoiser
 
 ======================================================================
@@ -27,41 +27,21 @@ real deployment artifacts do not exist yet:
 - ZCU104/PYNQ runtime validation
 
 The current workspace also does not contain the configured training datasets.
-The full test suite previously produced 56 passed and 6 failed; all six
-failures were caused by missing local ECG/noise dataset files, not by the
-model rewrite.
+The full test suite must be re-run in this environment; expect dataset-related
+failures until the datasets described in section 5, step 2 are restored.
 
-The latest focused model/export/training tests passed:
-
-    8 passed
-
-The modified files are currently:
-
-- PRD-ECG-Denoising-Autoencoder-FPGA.md
-- README.md
-- configs/defaults.yaml
-- hardware/vivado/create_design.tcl
-- requirements.txt
-- scripts/export_hls.py
-- src/models/quant_autoencoder.py
-- tests/test_model_contract.py
-
-Do not discard these changes without reviewing them first.
+The toolchain target was moved from Vivado/Vivado HLS 2019.1 to
+Vivado/Vitis 2023.2 in this pass. This is a tooling-compatibility update, not
+a retraining or architecture change: the model, export contract, and dataset
+requirements from the previous pass are unchanged. Do not re-run training
+solely because of this update; retrain only if section 5 below or the
+existing checkpoint state requires it.
 
 ======================================================================
-2. ARCHITECTURE DECISION
+2. ARCHITECTURE (UNCHANGED)
 ======================================================================
 
-The original model was a spatial encoder/decoder:
-
-    strided Conv1D -> bottleneck at 32 samples -> nearest UpSample1D -> output
-
-That architecture was changed because the legacy hls4ml frontend available for
-Vivado HLS 2019.1 did not support torch.nn.Upsample or the corresponding ONNX
-Resize operation. Trying to force that architecture through the old frontend
-was not productive.
-
-The new deployment model is a fixed-length, same-length convolutional denoiser:
+The deployment model is a fixed-length, same-length convolutional denoiser:
 
     Input: 1 x 256
     QuantConvBlock: 1  -> 16, kernel 7, stride 1, padding 3
@@ -72,214 +52,143 @@ The new deployment model is a fixed-length, same-length convolutional denoiser:
     QuantConv1D:      8  -> 1,  kernel 7, stride 1, padding 3
     Output: 1 x 256
 
-Every layer preserves the 256-sample spatial length. The model uses only
-operators that the legacy PyTorch frontend is expected to understand:
-Conv1d, BatchNorm1d, and ReLU. The model must be retrained from scratch.
-Existing checkpoints from the old encoder/decoder architecture are invalid.
+Every layer preserves the 256-sample spatial length and uses only Conv1d,
+BatchNorm1d, and ReLU, which hls4ml's PyTorch frontend supports under both
+the legacy Vivado backend and the current Vitis backend. This architecture
+choice remains correct for 2023.2 and does not need to change.
 
 The implementation is in:
 
     src/models/quant_autoencoder.py
 
-The export wrapper was updated to use model.layers instead of model.encoder and
-model.decoder.
-
 ======================================================================
-3. COMPATIBILITY CHANGES ALREADY MADE
+3. COMPATIBILITY CHANGES MADE FOR VIVADO/VITIS 2023.2
 ======================================================================
 
-3.1 Vivado IP catalog versions
+3.1 Vivado HLS was retired; the export backend must be Vitis
 
-Vivado 2019.1 does not contain the IP versions originally requested by the Tcl
-script. The following changes were made in hardware/vivado/create_design.tcl:
+Xilinx stopped shipping Vivado HLS after the 2019.x release line. Vivado
+2023.2 only installs Vitis HLS. The exporter (scripts/export_hls.py) was
+changed from hls4ml backend="Vivado" to backend="Vitis" in both
+config_from_pytorch_model and convert_from_pytorch_model. This is the single
+most important change for 2023.2 compatibility: exporting with the old
+"Vivado" backend string will not match the installed tool.
 
-    zynq_ultra_ps_e:3.5  -> zynq_ultra_ps_e:3.3
-    proc_sys_reset:5.1   -> proc_sys_reset:5.0
+3.2 Vivado IP catalog versions are pinned to confirmed 2023.2 values
 
-Vivado 2019.1 was verified to recognize:
+hardware/vivado/create_design.tcl previously pinned IP versions tuned for
+Vivado 2019.1's catalog (zynq_ultra_ps_e:3.3, proc_sys_reset:5.0). These were
+confirmed against a real Vivado 2023.2 install (via
+`get_ipdefs -filter {VLNV =~ "xilinx.com:ip:<name>:*"}`) and are now pinned
+directly:
 
-    xczu7ev-ffvc1156-2-e
-    zynq_ultra_ps_e:3.3
-    proc_sys_reset:5.0
+    zynq_ultra_ps_e:3.5
     axi_dma:7.1
     smartconnect:1.0
+    proc_sys_reset:5.0
 
-3.2 HLS backend
+(proc_sys_reset stayed at 5.0; the others moved up from the 2019.1 values.)
+The script checks each pinned VLNV is present in the active IP catalog and,
+only if it is missing (e.g. a later Vivado release drops that exact minor
+version), falls back to resolving the highest available version for that IP
+name via a resolve_ip_vlnv helper, with a printed warning. This keeps builds
+reproducible against the verified 2023.2 versions while not hard-failing on
+a future Vivado release that renumbers these IPs.
 
-The exporter was changed from the Vitis backend to the Vivado backend. The
-current exporter uses the older hls4ml API shape:
+The custom HLS accelerator IP (HLS_IP_VLNV) is still supplied explicitly by
+the caller, since it is produced by this project's own HLS packaging step,
+not the standard catalog.
 
-- granularity="layer"
-- input_shape=(None, 1, 256)
-- inputs_channel_last=True
-- transpose_outputs=False
-- backend="Vivado"
-- part="xczu7ev-ffvc1156-2-e"
-- clock_period=5
-- precision default: ap_fixed<16,6>
-- project name: ecg_denoiser
+3.3 Tool executable paths
 
-The exporter is in:
+Update any saved paths/scripts referencing the old install to the 2023.2
+install locations:
 
-    scripts/export_hls.py
+    Vivado 2023.2:    C:\Xilinx\Vivado\2023.2\bin\vivado.bat
+    Vitis HLS 2023.2:  C:\Xilinx\Vitis_HLS\2023.2\bin\vitis_hls.bat
 
-The intended legacy hls4ml pin in requirements.txt is:
+There is no vivado_hls.bat under a 2023.2 install; the equivalent commands
+are exposed through vitis_hls.
 
-    hls4ml==0.8.1
+3.4 hls4ml / Python export environment
 
-3.3 Documentation and configuration
+The hls4ml==0.8.1 pin is retained (requirements.txt), since that release
+already exposes a "Vitis" backend name -- only the backend argument passed by
+scripts/export_hls.py needed to change, not the hls4ml version. This has not
+been verified end-to-end against an installed Vitis HLS 2023.2 executable in
+this workspace (no Vivado/Vitis install is present here); confirm hls4ml
+actually invokes vitis_hls successfully as the first step of section 5.
 
-README.md, the PRD, and configs/defaults.yaml were updated to describe the
-same-length architecture and the retraining requirement.
+3.5 Documentation
+
+README.md, the PRD, and hardware/vivado/README.md were updated to describe
+Vitis HLS 2023.2 and the Vitis hls4ml backend instead of Vivado HLS 2019.1.
 
 ======================================================================
-4. ISSUES ENCOUNTERED DURING DEVELOPMENT
+4. THINGS THAT STILL NEED VERIFICATION ON A REAL 2023.2 INSTALL
 ======================================================================
 
-4.1 Original Vivado IP versions were unavailable
+These could not be confirmed without an installed Vivado/Vitis 2023.2
+toolchain, since none is available in this workspace. Treat all of them as
+open risks, not settled facts:
 
-The first Tcl script requested zynq_ultra_ps_e:3.5 and proc_sys_reset:5.1.
-Vivado 2019.1 returned no catalog entries for those exact versions. The
-installed compatible versions are 3.3 and 5.0 respectively. This was fixed in
-the Tcl script.
+4.1 zynq_ultra_ps_e block-design properties
 
-4.2 Vitis backend was wrong for Vivado 2019.1
+create_design.tcl sets PSU__USE__M_AXI_GP0, PSU__USE__S_AXI_GP2, and
+PSU__FPGA_PL0_ENABLE on zynq_ultra_ps_e:3.5 (confirmed present in this
+2023.2 install). These property names have been stable across many Vivado
+releases, but they have not been confirmed against 3.5 specifically in this
+workspace (no Vivado install here) -- run list_property on the cell after
+creation to confirm before trusting the block design to build cleanly.
 
-The initial exporter used backend="Vitis". Vivado HLS 2019.1 predates the
-Vitis HLS tool naming and flow. The exporter was changed to backend="Vivado".
+4.2 axi_dma interface widths
 
-4.3 Host prerequisites were initially missing
+The AXI DMA CONFIG properties (c_m_axis_mm2s_tdata_width, etc.) are set
+assuming the same DMA IP shape as before, now pinned to axi_dma:7.1
+(confirmed present in this 2023.2 install). Confirm axi_dma:7.1 still exposes
+identical CONFIG property names via list_property before trusting the
+generated design.
 
-The global Python interpreter did not have pytest, torch, Brevitas, ONNX,
-QONNX, hls4ml, PYNQ, or pyserial. A project virtual environment was configured
-at:
+4.3 hls4ml Vitis backend behavior differences
 
-    .venv/Scripts/python.exe
+The Vitis backend in hls4ml is not a drop-in behavioral clone of the Vivado
+backend -- default pragmas, interface synthesis (io_stream vs io_parallel
+handling), and some resource/latency characteristics can differ. Do not
+assume the HLS resource/latency numbers from any prior Vivado-backend run
+carry over; re-run C simulation and synthesis with the Vitis backend and
+record fresh numbers.
 
-The base Python/model packages and export packages were installed there. PYNQ
-is board-side software and is not expected to be installed on Windows.
-Always use the project interpreter instead of the global Python interpreter:
+4.4 hls4ml/TensorFlow/QKeras environment consistency
 
-    d:/blc1307/ECGDenoiser/.venv/Scripts/python.exe
+If QKeras/TensorFlow-based export paths are used alongside hls4ml, verify the
+installed TensorFlow/tf_keras/QKeras versions are mutually consistent in the
+export environment, independent of the Vivado/Vitis version. This was an
+open issue in the 2019.1 pass and is unrelated to the toolchain bump; it must
+still be checked.
 
-4.4 No checkpoint was available
-
-The prerequisite checker reported a missing checkpoint. A disposable random
-weight checkpoint was used only for conversion smoke tests. It must never be
-used as the deployment model. A real checkpoint must be produced by retraining
-the new architecture on the ECG dataset.
-
-4.5 No configured datasets were present
-
-The configured noise directory and clean ECG directory are absent from this
-workspace. The current config expects data locations under the repository,
-including:
-
-    mit-bih-noise-stress-test-database-1.0.0
-    data/clean
-
-The project input notes also reference a historical Windows path under
-C:\Users\varun\Documents\MyCode\ECGDenoiser. That path is not present in the
-current workspace and must be verified before training.
-
-4.6 Original architecture contained unsupported Upsample layers
-
-hls4ml 0.8.1 exposed support for Conv1d, BatchNorm1d, ReLU, pooling, reshape,
-and similar operations, but not torch.nn.Upsample. Its ONNX frontend also did
-not expose a usable Resize handler for this graph. This is why the architecture
-was rewritten instead of retaining the original decoder.
-
-4.7 hls4ml version/API differences
-
-hls4ml 1.3.0 accepted the newer conversion call shape but generated a project
-that Vivado HLS 2019.1 could not synthesize. hls4ml 0.8.1 has a different API:
-
-- input shape must include the channel dimension
-- batch dimension should be None
-- config granularity uses layer rather than name
-- Vivado fixed point uses ap_fixed<16,6>
-
-The exporter was adapted for that API.
-
-4.8 Vivado HLS 2019.1 compiler failure with hls4ml 1.3 output
-
-A disposable full-graph hls4ml 1.3 project was generated successfully and
-Vivado HLS 2019.1 began compiling it. C simulation passed after experimentation,
-but RTL synthesis failed in Vivado HLS's bundled Clang 3.1/C++ 4.5.2 headers.
-The errors included type_info and nested_exception failures, followed by
-failure when the C++ standard flag was removed. This established that the
-hls4ml 1.3 output/toolchain combination was not a reliable match.
-
-Do not report HLS synthesis as successful based only on project generation or
-C simulation. A real csynth result is required.
-
-4.9 Legacy TensorFlow/Keras environment mismatch
-
-After installing legacy hls4ml releases, imports encountered an environment
-problem: qkeras expected tensorflow.keras, while the environment exposed a
-split/mismatched TensorFlow and tf_keras installation. Observed package state
-included TensorFlow 2.14.1 and tf_keras 2.21.0. This needs to be repaired or
-isolated in a dedicated legacy export environment before hls4ml conversion can
-be considered validated.
-
-Do not silently work around this by changing the model or claiming the HLS
-flow is proven. First make the package versions internally consistent.
-
-4.10 PYNQ DMA buffer issue remains unresolved
-
-src/fpga/runtime.py currently allocates ordinary NumPy arrays. Real PYNQ DMA
-usually requires physically contiguous buffers allocated by pynq.allocate, and
-cache synchronization may be needed depending on the platform. The runtime
-abstraction tests use fake DMA and do not prove board operation.
-
-4.11 UART exact-read issue remains unresolved
-
-scripts/run_pynq_runtime.py passes serial port read directly into serve_uart.
-Serial reads can return fewer bytes than requested. A read_exact function that
-accumulates bytes until the 526-byte packet is complete, or raises on timeout,
-must be implemented before board testing.
-
-4.12 HLS IP interface names are not finalized
-
-hardware/vivado/create_design.tcl assumes the packaged HLS IP exposes:
-
-    s_axis
-    m_axis
-    s_axi_control
-    ap_clk
-    ap_rst_n
-
-These names must be checked in the actual packaged IP. hls4ml may use different
-port names or generate a wrapper interface. The Tcl block design must be
-adapted to the actual VLNV and interface names after packaging.
-
-4.13 Temporary/tool-generated files appeared during testing
-
-Vivado and Vivado HLS generated temporary projects, logs, .Xil data, tb_data,
-and crash/log files while testing. Review git status before committing. Do not
-commit generated bitstreams, temporary HLS projects, crash dumps, or machine-
-specific paths unless explicitly intended.
+4.5 Everything in section 4 of the prior notes about PYNQ DMA buffers, UART
+exact-read handling, and finalized HLS IP interface names remains open and is
+not affected by the toolchain version change. See section 6 below for the
+carried-over work items.
 
 ======================================================================
 5. REQUIRED WORK, IN ORDER
 ======================================================================
 
-Step 1 - Repair and record the Python export environment
+Step 1 - Verify the 2023.2 export environment
 
 - Use the project interpreter.
-- Ensure hls4ml==0.8.1 is installed.
-- Install a mutually compatible TensorFlow/Keras/QKeras set for that hls4ml
-  release, preferably in a dedicated environment if the current .venv cannot
-  be repaired.
-- Verify all of these imports in one command:
+- Ensure hls4ml==0.8.1 is installed alongside a compatible
+  onnx/qonnx/TensorFlow stack (see requirements.txt).
+- Verify these imports succeed in one command:
 
     import torch
     import brevitas
     import onnx
     import hls4ml
 
-- Verify hls4ml reports the Vivado backend and the expected PyTorch layer
-  handlers.
+- Confirm hls4ml can locate and invoke the installed Vitis HLS 2023.2
+  executable (vitis_hls) when backend="Vitis" is used.
 - Record exact package versions in the final project notes.
 
 Step 2 - Restore the datasets
@@ -292,83 +201,75 @@ Step 2 - Restore the datasets
 
 Useful checks:
 
-    d:/blc1307/ECGDenoiser/.venv/Scripts/python.exe -m pytest -q tests/test_dataset_assembly.py tests/test_dataset_validation.py tests/test_wfdb_acquisition.py tests/test_torch_dataset.py
+    python -m pytest -q tests/test_dataset_assembly.py tests/test_dataset_validation.py tests/test_wfdb_acquisition.py tests/test_torch_dataset.py
 
-Step 3 - Recreate calibration
+Step 3 - Recreate calibration (only if not already produced)
 
-The new model still expects the configured fixed affine input contract. Generate:
-
-    artifacts/input_calibration.json
-
-using:
-
-    d:/blc1307/ECGDenoiser/.venv/Scripts/python.exe scripts/create_config_calibration.py `
+    python scripts/create_config_calibration.py `
       --config configs/defaults.yaml `
       --output artifacts/input_calibration.json
 
-Verify calibration tests and inspect that the artifact is not accidentally
-based on test data.
+Step 4 - Train or reuse an existing checkpoint
 
-Step 4 - Retrain from scratch
+If a valid checkpoint for the current architecture (src/models/quant_autoencoder.py)
+already exists, reuse it; this toolchain update did not change the model. If
+none exists yet:
 
-Do not load an old checkpoint. Train the rewritten model:
-
-    d:/blc1307/ECGDenoiser/.venv/Scripts/python.exe scripts/train_model.py `
+    python scripts/train_model.py `
       --config configs/defaults.yaml `
       --checkpoint checkpoints/best_model.pt `
       --progress runs/retrained_progress.json
 
-The training run must complete with the configured split, fixed calibration,
-MSE loss, batch size 64, maximum 50 epochs, and validation PRD checkpoint
-selection. Preserve the progress JSON and training logs.
+Step 5 - Evaluate the model
 
-Step 5 - Evaluate the retrained model
+Run the project evaluation commands/tests and confirm MSE, output SNR, SNR
+improvement, PRD, and morphology checks meet the PRD targets.
 
-Run the project evaluation commands/tests. Confirm that the rewritten model is
-not merely shape-compatible: check MSE, output SNR, SNR improvement, PRD, and
-the morphology checks required by the project. Compare against the prior model
-results only as a reference; old weights cannot be reused.
+Step 6 - Export ONNX and HLS with the Vitis backend
 
-Step 6 - Export ONNX and HLS
-
-Run:
-
-    d:/blc1307/ECGDenoiser/.venv/Scripts/python.exe scripts/export_hls.py `
+    python scripts/export_hls.py `
       --checkpoint checkpoints/best_model.pt `
       --onnx artifacts/ecg_denoiser.onnx `
       --output-dir artifacts/ecg_denoiser_hls
 
 Check that:
 
-- The exporter loads the new checkpoint.
+- The exporter loads the checkpoint.
 - ONNX is generated.
-- The HLS project is generated.
+- The HLS project is generated with backend="Vitis".
 - The generated project targets xczu7ev-ffvc1156-2-e, not the default xcvu13p.
 - The generated HLS precision matches the intended fixed-point contract.
 - The generated top-level interfaces are recorded before packaging.
 
-Step 7 - Run Vivado HLS 2019.1 validation
+Note: the four standard block-design IP versions (zynq_ultra_ps_e:3.5,
+axi_dma:7.1, smartconnect:1.0, proc_sys_reset:5.0) are already confirmed
+present in this Vivado 2023.2 install and pinned in create_design.tcl; no
+further catalog check is needed for those before Step 9.
 
-Use the installed Vivado HLS 2019.1 executable, not a Vitis executable. Run
-C simulation first, then RTL synthesis. A successful result must include a
-csynth report with no errors and resource/latency estimates.
+Step 7 - Run Vitis HLS 2023.2 validation
+
+Use the installed Vitis HLS 2023.2 executable. Run C simulation first, then
+RTL synthesis. A successful result must include a csynth report with no
+errors and resource/latency estimates.
 
 If synthesis fails:
 
-- Capture the complete vivado_hls.log.
+- Capture the complete vitis_hls.log.
 - Identify whether the failure is generated C++, an unsupported operator, a
   compiler flag, an include/version conflict, or a resource issue.
-- Do not modify the model solely to hide a compiler error without recording the
-  reason.
-- Keep the generated HLS project outside the source tree or clean it afterward.
+- Do not modify the model solely to hide a compiler error without recording
+  the reason.
+- Keep the generated HLS project outside the source tree or clean it
+  afterward.
 
 Step 8 - Package the HLS IP
 
 - Package the synthesized HLS output as Vivado IP.
 - Record the exact VLNV.
-- Inspect the AXI stream widths, TLAST behavior, AXI-Lite control ports, clock,
-  and active-low reset.
-- Confirm whether the stream transports one 256-sample window as 16-bit values.
+- Inspect the AXI stream widths, TLAST behavior, AXI-Lite control ports,
+  clock, and active-low reset.
+- Confirm whether the stream transports one 256-sample window as 16-bit
+  values.
 - Confirm that DMA stream data width and HLS stream data width agree.
 
 Step 9 - Build the ZCU104 block design
@@ -379,6 +280,9 @@ Use hardware/vivado/create_design.tcl with:
     set PROJECT_NAME "ecg_denoiser_zcu104"
     set PROJECT_DIR "<absolute project directory>"
     source hardware/vivado/create_design.tcl
+
+The script now auto-resolves standard Xilinx IP versions from the installed
+2023.2 IP catalog (see section 3.2); only HLS_IP_VLNV needs to be supplied.
 
 Then:
 
@@ -414,7 +318,7 @@ The current runtime needs board-specific completion:
 
 Step 12 - Hardware validation
 
-Use deterministic golden vectors generated from the retrained checkpoint. Test:
+Use deterministic golden vectors generated from the checkpoint. Test:
 
 - All-zero or constant input handling.
 - Minimum and maximum int16 values.
@@ -424,27 +328,45 @@ Use deterministic golden vectors generated from the retrained checkpoint. Test:
 - Packet sequence rollover behavior.
 - CRC corruption rejection.
 - DMA timeout/error handling.
-- FPGA output against the quantized software reference within an agreed fixed-
-  point tolerance.
+- FPGA output against the quantized software reference within an agreed
+  fixed-point tolerance.
 
 ======================================================================
-6. ACCEPTANCE CRITERIA
+6. CARRIED-OVER OPEN ISSUES (UNCHANGED BY THE TOOLCHAIN UPDATE)
 ======================================================================
 
-The work is complete only when all of the following are true:
+- No checkpoint currently exists; a disposable random-weight checkpoint must
+  never be used as the deployment model.
+- No configured datasets are present in this workspace.
+- src/fpga/runtime.py allocates ordinary NumPy arrays; real PYNQ DMA needs
+  pynq.allocate buffers and possibly cache sync handling.
+- scripts/run_pynq_runtime.py needs a read_exact function that accumulates
+  bytes until the 526-byte packet is complete, or raises on timeout.
+- hardware/vivado/create_design.tcl assumes the packaged HLS IP exposes
+  s_axis, m_axis, s_axi_control, ap_clk, ap_rst_n. These names must be
+  checked against the actual packaged IP after HLS conversion; hls4ml's
+  Vitis backend may name ports differently than the old Vivado backend did.
+- Review git status before committing; do not commit generated bitstreams,
+  temporary HLS/Vivado projects, crash dumps, or machine-specific paths.
+
+======================================================================
+7. ACCEPTANCE CRITERIA
+======================================================================
 
 [ ] Dataset validation tests pass with the real configured datasets.
 [ ] Calibration artifact is generated from the intended training data.
-[ ] New architecture is trained from scratch.
-[ ] Retrained checkpoint loads and produces shape (1, 1, 256).
+[ ] Checkpoint loads and produces shape (1, 1, 256).
 [ ] Evaluation metrics and morphology checks are recorded.
-[ ] hls4ml 0.8.1 imports cleanly in the dedicated export environment.
-[ ] HLS conversion produces a project for xczu7ev-ffvc1156-2-e.
-[ ] Vivado HLS 2019.1 C simulation passes.
-[ ] Vivado HLS 2019.1 RTL synthesis passes.
+[ ] hls4ml 0.8.1 imports cleanly and invokes Vitis HLS 2023.2 successfully.
+[ ] HLS conversion (backend="Vitis") produces a project for
+    xczu7ev-ffvc1156-2-e.
+[ ] Vitis HLS 2023.2 C simulation passes.
+[ ] Vitis HLS 2023.2 RTL synthesis passes.
 [ ] HLS resources and latency are acceptable for the ZCU104.
 [ ] HLS IP VLNV and interface names are recorded.
-[ ] Vivado block design validates without errors.
+[ ] Vivado 2023.2 block design validates without errors, using the pinned
+    2023.2 IP versions (zynq_ultra_ps_e:3.5, axi_dma:7.1, smartconnect:1.0,
+    proc_sys_reset:5.0).
 [ ] Vivado synthesis and implementation pass timing checks.
 [ ] .bit and .hwh are generated.
 [ ] PYNQ overlay loads successfully.
@@ -455,43 +377,41 @@ The work is complete only when all of the following are true:
     are accidentally committed.
 
 ======================================================================
-7. IMPORTANT COMMANDS
+8. IMPORTANT COMMANDS
 ======================================================================
-
-Use the project Python interpreter:
-
-    d:/blc1307/ECGDenoiser/.venv/Scripts/python.exe
 
 Focused model/export tests:
 
-    d:/blc1307/ECGDenoiser/.venv/Scripts/python.exe -m pytest -q tests/test_model_contract.py tests/test_export_hls.py tests/test_training_pipeline.py
+    python -m pytest -q tests/test_model_contract.py tests/test_export_hls.py tests/test_training_pipeline.py
 
 Full tests:
 
-    d:/blc1307/ECGDenoiser/.venv/Scripts/python.exe -m pytest -q
+    python -m pytest -q
 
 FPGA prerequisite report:
 
-    d:/blc1307/ECGDenoiser/.venv/Scripts/python.exe scripts/check_fpga_prerequisites.py
+    python scripts/check_fpga_prerequisites.py
 
-Vivado 2019.1 executable:
+Vivado 2023.2 executable:
 
-    C:\Xilinx\Vivado\2019.1\bin\vivado.bat
+    C:\Xilinx\Vivado\2023.2\bin\vivado.bat
 
-Vivado HLS 2019.1 executable:
+Vitis HLS 2023.2 executable:
 
-    C:\Xilinx\Vivado\2019.1\bin\vivado_hls.bat
+    C:\Xilinx\Vitis_HLS\2023.2\bin\vitis_hls.bat
 
-Never run Python commands inside an interactive Vivado/Vivado HLS Tcl prompt.
-Exit the Tcl prompt first, then run Python from PowerShell. This caused command
-routing confusion during earlier testing.
+Never run Python commands inside an interactive Vivado/Vitis HLS Tcl prompt.
+Exit the Tcl prompt first, then run Python from a separate shell.
 
 ======================================================================
-8. RESUME NOTE
+9. RESUME NOTE
 ======================================================================
 
 Start the next session by reading this file, then run git status and the
-prerequisite checker. The immediate blocker is dataset restoration. After the
-dataset tests pass, generate calibration and retrain the rewritten model. Do
-not proceed to Vivado IP packaging until the retrained checkpoint and a clean
-Vivado HLS 2019.1 synthesis report exist.
+prerequisite checker. This pass only updated tooling compatibility for
+Vivado/Vitis 2023.2 (Vitis HLS backend in the exporter, IP-version
+auto-resolution in the Tcl build script, and doc/path updates); no model
+code, dataset contracts, or Vivado IP knowledge could be validated against a
+real 2023.2 installation because none is present in this workspace. Treat
+section 4 as the first thing to check once a real Vivado/Vitis 2023.2
+install is available, before trusting any part of the hardware flow.
