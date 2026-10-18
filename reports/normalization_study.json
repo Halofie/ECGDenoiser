@@ -1,0 +1,81 @@
+{
+  "num_windows": 12690,
+  "val_records": [
+    "222",
+    "230",
+    "231",
+    "233",
+    "234"
+  ],
+  "val_seed": 1000,
+  "results": {
+    "noisy_input": {
+      "mse": 0.06638362258672714,
+      "prd_percent": 46.605140686035156,
+      "snr_db": 9.020136833190918,
+      "prd_percent_median": 34.87301254272461,
+      "prd_by_input_snr_db": {
+        "-5..+0": 85.74825286865234,
+        "+0..+5": 51.70304870605469,
+        "+5..+10": 30.05689811706543,
+        "+10..+15": 16.99248504638672
+      }
+    },
+    "oracle_trained/clean_oracle": {
+      "mse": 0.03288091719150543,
+      "prd_percent": 36.39064025878906,
+      "snr_db": 9.869003295898438,
+      "prd_percent_median": 30.02635383605957,
+      "prd_by_input_snr_db": {
+        "-5..+0": 47.296077728271484,
+        "+0..+5": 37.28147888183594,
+        "+5..+10": 31.547231674194336,
+        "+10..+15": 28.942745208740234
+      },
+      "checkpoint": "checkpoints/ecg_resunet1d.pt",
+      "normalization": "clean_oracle"
+    },
+    "oracle_trained/noisy_minmax": {
+      "mse": 0.06625156104564667,
+      "prd_percent": 46.65688705444336,
+      "snr_db": 8.25222396850586,
+      "prd_percent_median": 37.48017120361328,
+      "prd_by_input_snr_db": {
+        "-5..+0": 72.04063415527344,
+        "+0..+5": 47.99534225463867,
+        "+5..+10": 35.29380416870117,
+        "+10..+15": 30.195674896240234
+      },
+      "checkpoint": "checkpoints/ecg_resunet1d.pt",
+      "normalization": "noisy_minmax"
+    },
+    "deployable/clean_oracle": {
+      "mse": 0.03460095077753067,
+      "prd_percent": 35.381412506103516,
+      "snr_db": 10.251788139343262,
+      "prd_percent_median": 29.784099578857422,
+      "prd_by_input_snr_db": {
+        "-5..+0": 50.09269332885742,
+        "+0..+5": 37.841548919677734,
+        "+5..+10": 28.859846115112305,
+        "+10..+15": 23.981033325195312
+      },
+      "checkpoint": "checkpoints/ecg_resunet1d_noisy_minmax.pt",
+      "normalization": "clean_oracle"
+    },
+    "deployable/noisy_minmax": {
+      "mse": 0.043279051780700684,
+      "prd_percent": 38.56010818481445,
+      "snr_db": 9.800603866577148,
+      "prd_percent_median": 31.729307174682617,
+      "prd_by_input_snr_db": {
+        "-5..+0": 57.52607727050781,
+        "+0..+5": 41.260643005371094,
+        "+5..+10": 30.105247497558594,
+        "+10..+15": 24.41280746459961
+      },
+      "checkpoint": "checkpoints/ecg_resunet1d_noisy_minmax.pt",
+      "normalization": "noisy_minmax"
+    }
+  }
+}

@@ -34,6 +34,8 @@ htmlcov/
 # Local dataset folders and generated research assets
 artifacts/
 outputs/
+results/
+dist/
 checkpoints/
 wandb/
 mlruns/

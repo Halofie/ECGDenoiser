@@ -5,6 +5,10 @@ scipy>=1.11,<2.0
 PyYAML>=6.0,<7.0
 wfdb>=4.1,<5.0
 
+# Host <-> ZCU104 UART link (scripts/uart_host_client.py); plots are optional
+pyserial>=3.5,<4.0
+matplotlib>=3.7
+
 # Testing
 pytest>=8.0,<9.0
 

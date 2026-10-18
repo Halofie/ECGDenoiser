@@ -12,9 +12,10 @@ DATASET_DIR = Path(__file__).resolve().parents[1] / "mit-bih-noise-stress-test-d
 def test_discover_records_find_expected_local_records():
     records = discover_records(DATASET_DIR)
 
+    # Only the raw em/bw noise records are kept: noisy signals are mixed
+    # dynamically (PROJECT-INPUTS-REQUIRED 2.3), so the pre-generated
+    # 118e00/119e00 records are intentionally absent.
     names = {record["name"] for record in records}
-    assert "118e00" in names
-    assert "119e00" in names
     assert "bw" in names
     assert "em" in names
 

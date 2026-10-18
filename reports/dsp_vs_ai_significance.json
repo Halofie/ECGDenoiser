@@ -1,0 +1,69 @@
+{
+  "window_count": 12690,
+  "descriptive": {
+    "noisy": {
+      "prd_mean": 46.60514475016297,
+      "prd_std": 35.92809671397293,
+      "mse_mean": 0.06638362964489912,
+      "mse_std": 0.0926640581028534,
+      "snr_mean": 9.020137075850105,
+      "snr_std": 6.543026756935468
+    },
+    "dsp_filter": {
+      "prd_mean": 62.215783309348964,
+      "prd_std": 37.23308848235241,
+      "mse_mean": 0.11398370817400533,
+      "mse_std": 0.14440055438500285,
+      "snr_mean": 5.625585548877671,
+      "snr_std": 5.250395839202335
+    },
+    "ai_model": {
+      "prd_mean": 36.39055324269405,
+      "prd_std": 21.000495163070845,
+      "mse_mean": 0.03288144126051554,
+      "mse_std": 0.029170521438677835,
+      "snr_mean": 9.86899859333353,
+      "snr_std": 4.16614715603053
+    }
+  },
+  "significance_tests_prd": {
+    "dsp_vs_noisy": {
+      "label": "DSP filter vs Noisy input",
+      "mean_diff": 15.61063855918599,
+      "std_diff": 28.70965557728569,
+      "t_statistic": 61.25245459571827,
+      "t_p_value": 0.0,
+      "wilcoxon_statistic": 14987323.0,
+      "wilcoxon_p_value": 0.0,
+      "cohens_d": 0.4266785925008224,
+      "n": 12690
+    },
+    "ai_vs_noisy": {
+      "label": "AI model vs Noisy input",
+      "mean_diff": -10.214591507468924,
+      "std_diff": 24.695399109236856,
+      "t_statistic": -46.59461902709301,
+      "t_p_value": 0.0,
+      "wilcoxon_statistic": 25047696.0,
+      "wilcoxon_p_value": 1.5995559102329513e-297,
+      "cohens_d": -0.34712108800324704,
+      "n": 12690
+    },
+    "ai_vs_dsp": {
+      "label": "AI model vs DSP filter",
+      "mean_diff": -25.825230066654917,
+      "std_diff": 29.394460453905033,
+      "t_statistic": -98.97135524856417,
+      "t_p_value": 0.0,
+      "wilcoxon_statistic": 6042727.0,
+      "wilcoxon_p_value": 0.0,
+      "cohens_d": -0.8543807534415705,
+      "n": 12690
+    }
+  },
+  "fraction_windows_improved": {
+    "dsp_beats_noisy": 0.24239558707643813,
+    "ai_beats_noisy": 0.5941686367218282,
+    "ai_beats_dsp": 0.8365642237982663
+  }
+}

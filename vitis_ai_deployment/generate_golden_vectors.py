@@ -18,9 +18,13 @@ an exact match -- compare within a tolerance (deploy_zcu104.py's
 --golden-dir mode reports MSE/max-abs-diff per window; use those numbers to
 judge whether the DPU's output is "close enough", not exact equality).
 
+Inputs are normalized with the same deployable method the board uses
+(--normalization, default noisy_minmax), and the checkpoint must have been
+trained with that method (checked).
+
 Usage:
     python generate_golden_vectors.py \
-        --checkpoint ../checkpoints/ecg_resunet1d.pt \
+        --checkpoint ../checkpoints/ecg_resunet1d_noisy_minmax.pt \
         --clean-dir ../data/clean \
         --noise-dir ../mit-bih-noise-stress-test-database-1.0.0 \
         --output-dir ../artifacts/golden_vectors \
@@ -30,24 +34,29 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 from pathlib import Path
 
 import numpy as np
 import torch
 
 from dataset import ECG512Dataset, default_train_val_split
-from model import ECGResUNet1D, load_checkpoint
+from model import ECGResUNet1D, load_checkpoint, require_normalization
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate golden test vectors for board validation.")
-    parser.add_argument("--checkpoint", default="../checkpoints/ecg_resunet1d.pt", type=Path)
+    parser.add_argument("--checkpoint", default="../checkpoints/ecg_resunet1d_noisy_minmax.pt", type=Path)
     parser.add_argument("--clean-dir", default="../data/clean")
     parser.add_argument("--noise-dir", default="../mit-bih-noise-stress-test-database-1.0.0")
     parser.add_argument("--output-dir", default="../artifacts/golden_vectors", type=Path)
     parser.add_argument("--num-vectors", type=int, default=5)
+    parser.add_argument("--normalization", default="noisy_minmax",
+                        choices=("clean_oracle", "noisy_minmax", "noisy_robust"))
     args = parser.parse_args()
 
+    require_normalization(args.checkpoint, args.normalization)
     model = ECGResUNet1D()
     load_checkpoint(model, args.checkpoint, map_location="cpu")
     model.eval()
@@ -62,6 +71,7 @@ def main() -> None:
         records=val_records,
         deterministic=True,
         seed=1000,
+        normalization=args.normalization,
     )
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -80,6 +90,14 @@ def main() -> None:
             np.save(args.output_dir / f"expected_{vector_id}.npy", expected)
             np.save(args.output_dir / f"clean_{vector_id}.npy", clean_flat)
 
+    with open(args.output_dir / "golden_meta.json", "w", encoding="utf-8") as handle:
+        json.dump({
+            "checkpoint": str(args.checkpoint),
+            "checkpoint_md5": hashlib.md5(args.checkpoint.read_bytes()).hexdigest(),
+            "normalization": args.normalization,
+            "dataset_indices": [int(i) for i in indices],
+            "val_records": list(val_records),
+        }, handle, indent=2)
     print(f"Wrote {len(indices)} golden vectors to {args.output_dir}")
     print("Each vector: input_i.npy (DPU input, float32[512]), "
           "expected_i.npy (float model output, float32[512]), "

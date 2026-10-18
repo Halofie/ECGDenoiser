@@ -136,10 +136,37 @@ class ECGResUNet1D(nn.Module):
         return self.head(u1)     # (N, 1, 1, 512)
 
 
-def save_checkpoint(model: nn.Module, path: str | Path) -> None:
+def save_checkpoint(model: nn.Module, path: str | Path, normalization: str | None = None) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    torch.save({"model_state_dict": model.state_dict()}, path)
+    payload = {"model_state_dict": model.state_dict()}
+    if normalization is not None:
+        payload["normalization"] = normalization
+    torch.save(payload, path)
+
+
+def checkpoint_normalization(path: str | Path) -> str:
+    """Input normalization a checkpoint was trained with.
+
+    Checkpoints saved before this field existed were all trained with the
+    clean-oracle scaling, so that is the fallback.
+    """
+    try:
+        checkpoint = torch.load(path, map_location="cpu", weights_only=True)
+    except TypeError:
+        checkpoint = torch.load(path, map_location="cpu")
+    return str(checkpoint.get("normalization", "clean_oracle"))
+
+
+def require_normalization(path: str | Path, normalization: str) -> None:
+    """Fail fast when a checkpoint is paired with the wrong input scaling."""
+    trained_with = checkpoint_normalization(path)
+    if trained_with != normalization:
+        raise ValueError(
+            f"{path} was trained with normalization={trained_with!r} but "
+            f"normalization={normalization!r} was requested. Pass --normalization {trained_with} "
+            "or use a checkpoint trained with the deployable scaling."
+        )
 
 
 def load_checkpoint(model: nn.Module, path: str | Path, map_location: str = "cpu") -> nn.Module:

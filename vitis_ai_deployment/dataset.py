@@ -49,6 +49,12 @@ from src.data.fetch_dataset import DEFAULT_CLEAN_RECORDS, acquire_clean_records,
 from src.noise.noise_mix import mix_clean_and_noise
 from src.preprocessing.window import extract_window, generate_windows
 
+BOARD_DIR = Path(__file__).resolve().parent / "board"
+if str(BOARD_DIR) not in sys.path:
+    sys.path.insert(0, str(BOARD_DIR))
+
+from ecg_board import preprocess  # noqa: E402  (numpy-only, shared with the board runtime)
+
 
 def load_noise_records(noise_dir: str | Path, names: Iterable[str] = ("em", "bw")) -> dict[str, dict[str, Any]]:
     """Load the requested local nstdb noise records by name."""
@@ -88,6 +94,13 @@ WINDOW_LENGTH = 512
 WINDOW_STRIDE = 256
 SNR_RANGE_DB = (-5.0, 15.0)
 NOISE_WEIGHTS = {"em": 0.7, "bw": 0.3, "ma": 0.0}
+
+# "clean_oracle" scales noisy and clean by the CLEAN window's min/max. That is
+# what checkpoints/ecg_resunet1d.pt was trained with, but it cannot be
+# computed on the board (only the noisy signal exists there). The other
+# methods fit the affine transform from the noisy window alone, exactly as
+# the board runtime does (ecg_board.preprocess), and apply it to both.
+NORMALIZATIONS = ("clean_oracle",) + preprocess.METHODS
 
 # Held out by record (patient), not by window, so validation windows never
 # come from a signal the model trained on. Fixed split, last 5 of the 26
@@ -144,7 +157,11 @@ class ECG512Dataset(Dataset):
         seed: int = 42,
         deterministic: bool = True,
         download_missing: bool = True,
+        normalization: str = "clean_oracle",
     ):
+        if normalization not in NORMALIZATIONS:
+            raise ValueError(f"normalization must be one of {NORMALIZATIONS}, got {normalization!r}")
+        self.normalization = normalization
         clean_meta = acquire_clean_records(
             list(records) if records is not None else None,
             clean_dir,
@@ -184,7 +201,8 @@ class ECG512Dataset(Dataset):
     def __len__(self) -> int:
         return len(self._samples)
 
-    def __getitem__(self, index: int):
+    def raw_pair(self, index: int) -> tuple[np.ndarray, np.ndarray]:
+        """Return the physical-unit (clean, noisy) window pair for one index."""
         sample = self._samples[index]
         clean_raw = sample["clean"]
         start = sample["start"]
@@ -195,24 +213,38 @@ class ECG512Dataset(Dataset):
 
         rng = np.random.default_rng(self.seed + index) if self.deterministic else np.random.default_rng()
         target_snr = float(rng.uniform(*self.snr_range_db))
-        noisy_raw, alpha = mix_clean_and_noise(clean_raw, noise, target_snr)
+        noisy_raw, _alpha = mix_clean_and_noise(clean_raw, noise, target_snr)
+        return clean_raw, noisy_raw
 
-        # Normalize noisy and clean with the SAME affine transform (derived
-        # from the clean window), not independently. normalize_window()
-        # applied separately to each would rescale the noisy input and the
-        # clean target by two different, noise-realization-dependent
-        # min/max values -- the network would then have to learn an extra
-        # per-window rescaling on top of denoising itself, which is a much
-        # harder and noisier target function. Sharing the clean window's
-        # scale makes the target a literal "predict the signal on a fixed
-        # scale" problem; the noisy input is clipped to [-1, 1] since a
-        # low-SNR noise realization can exceed the clean window's range.
-        min_val = float(np.min(clean_raw))
-        max_val = float(np.max(clean_raw))
-        span = max(max_val - min_val, 1e-6)
-        clean = ((2.0 * (clean_raw - min_val) / span) - 1.0).astype(np.float32)
-        noisy = np.clip((2.0 * (noisy_raw - min_val) / span) - 1.0, -1.0, 1.0).astype(np.float32)
+    def normalize_pair(self, clean_raw: np.ndarray, noisy_raw: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """Scale a physical (clean, noisy) pair into the model's input/target domain."""
+        if self.normalization == "clean_oracle":
+            # Normalize noisy and clean with the SAME affine transform (derived
+            # from the clean window), not independently. normalize_window()
+            # applied separately to each would rescale the noisy input and the
+            # clean target by two different, noise-realization-dependent
+            # min/max values -- the network would then have to learn an extra
+            # per-window rescaling on top of denoising itself, which is a much
+            # harder and noisier target function. Sharing the clean window's
+            # scale makes the target a literal "predict the signal on a fixed
+            # scale" problem; the noisy input is clipped to [-1, 1] since a
+            # low-SNR noise realization can exceed the clean window's range.
+            min_val = float(np.min(clean_raw))
+            max_val = float(np.max(clean_raw))
+            span = max(max_val - min_val, 1e-6)
+            clean = ((2.0 * (clean_raw - min_val) / span) - 1.0).astype(np.float32)
+            noisy = np.clip((2.0 * (noisy_raw - min_val) / span) - 1.0, -1.0, 1.0).astype(np.float32)
+            return clean, noisy
+        # Deployable: fit on the noisy window only, apply the same transform to
+        # the clean target (unclipped -- the target may exceed [-1, 1]).
+        affine = preprocess.fit_affine(noisy_raw, self.normalization)
+        noisy = preprocess.apply_affine(noisy_raw, affine, clip=True)
+        clean = preprocess.apply_affine(clean_raw, affine, clip=False)
+        return clean, noisy
 
+    def __getitem__(self, index: int):
+        clean_raw, noisy_raw = self.raw_pair(index)
+        clean, noisy = self.normalize_pair(clean_raw, noisy_raw)
         return (
             torch.from_numpy(noisy.copy()).unsqueeze(0),  # (1, 512)
             torch.from_numpy(clean.copy()).unsqueeze(0),

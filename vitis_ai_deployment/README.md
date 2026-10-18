@@ -45,6 +45,51 @@ to improve further. Proceeding to quantization/compilation with this
 checkpoint regardless, per project decision -- treat PRD improvement as a
 parallel, not blocking, follow-up.
 
+## Update 2026-10-18: deployable normalization and board runtime
+
+**The checkpoint above cannot be deployed as-is.** It was trained with
+`clean_oracle` normalization, which scales the noisy input using the *clean*
+window's min/max. The board only ever has the noisy signal. Scored with
+normalization the board can compute, that checkpoint is no better than the
+raw noisy input. The model was retrained with `--normalization noisy_minmax`
+(now the default in `train.py`, `quantize.py` and `generate_golden_vectors.py`).
+The normalization is stored inside the checkpoint and checked before
+quantization, golden-vector generation and QAT.
+
+12,690 held-out windows, scored as the board runs (`scripts/eval_deployable_normalization.py`):
+
+| Model / normalization | PRD % | SNR dB |
+|---|---:|---:|
+| Noisy input (no processing) | 46.61 | 9.02 |
+| `ecg_resunet1d.pt`, clean-oracle (not deployable) | 36.39 | 9.87 |
+| `ecg_resunet1d.pt`, noisy min/max (what the board would do) | 46.66 | 8.25 |
+| **`ecg_resunet1d_noisy_minmax.pt`, noisy min/max (deploy this)** | **38.56** | **9.80** |
+
+**Board runtime.** The runtime is in `board/`: a numpy-only, Python 3.7+
+package plus scripts. The same code runs on the laptop with
+`--backend torch`, which is how the whole flow was rehearsed.
+
+| File | Runs on | Purpose |
+|---|---|---|
+| `board/uart_server.py` | board | UART (or TCP) denoising service. It reports DPU and pre/post timing per window and logs power. |
+| `board/board_session.py` | board | Offline measurements: golden vectors, latency, throughput, and idle/active power with energy per window. |
+| `board/power_monitor.py` | board | Lists and logs the hwmon power rails. |
+| `board/uart_setup.sh` | board | Finds a UART, or frees the console UART. |
+| `../scripts/uart_host_client.py` | laptop | Streams noisy ECG and scores the board output against the clean signal and the laptop model. |
+| `../scripts/make_board_bundle.py` | laptop | Builds `dist/zcu104_bundle.tar.gz`: runtime, xmodel, golden inputs and manifest. |
+| `../scripts/rehearse_board_day.py` | laptop | Runs the full flow end to end without the board. |
+| `../scripts/build_hardware_report.py` | laptop | Builds `reports/hardware_results.md` from the result folders. |
+| `requantize_and_compile.sh` | Vitis AI Docker | Runs calibration, the INT8-vs-float check (`quant_eval.json`) and compilation. |
+
+The UART protocol is a v2 of `src/fpga/uart_protocol.py`, using 512-sample
+int16 windows. A request is 1038 B and a response 1058 B, including the
+board's timing. Frames are CRC32-checked, the reader resyncs after line
+noise, and the host retries on error.
+
+**Step-by-step for board day: [BOARD_DAY_RUNBOOK.md](BOARD_DAY_RUNBOOK.md).**
+The sections below describe the original pipeline. Where they disagree with
+the runbook, the runbook is current.
+
 ## Why the model is built from Conv2d, not Conv1d
 
 The DPUCZDX8G IP is a 2D image core. `nn.Conv1d` is not a dependable op

@@ -47,7 +47,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
 
 from dataset import ECG512Dataset, default_train_val_split
-from model import INPUT_LENGTH, ECGResUNet1D, load_checkpoint, save_checkpoint
+from model import INPUT_LENGTH, ECGResUNet1D, load_checkpoint, require_normalization, save_checkpoint
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -110,6 +110,7 @@ def build_datasets(args) -> tuple[Dataset, Dataset | None]:
         deterministic=True,
         seed=42,
         download_missing=args.download_missing,
+        normalization=args.normalization,
     )
     val_dataset = None
     if val_records:
@@ -120,6 +121,7 @@ def build_datasets(args) -> tuple[Dataset, Dataset | None]:
             deterministic=True,
             seed=1000,  # different seed stream than training, still fixed across epochs
             download_missing=args.download_missing,
+            normalization=args.normalization,
         )
     return train_dataset, val_dataset
 
@@ -158,6 +160,7 @@ def train_float(
     patience: int = 10,
     batch_size: int = 32,
     num_workers: int = 0,
+    normalization: str | None = None,
 ) -> nn.Module:
     loader = DataLoader(
         train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers,
@@ -213,14 +216,14 @@ def train_float(
             if val_metrics["prd_percent"] < best_prd:
                 best_prd = val_metrics["prd_percent"]
                 epochs_without_improvement = 0
-                save_checkpoint(model, checkpoint_path)
+                save_checkpoint(model, checkpoint_path, normalization)
                 record["saved_best"] = True
             else:
                 epochs_without_improvement += 1
                 record["saved_best"] = False
         else:
             print(f"[float] epoch {epoch + 1}/{epochs} train_loss={train_loss:.6f}")
-            save_checkpoint(model, checkpoint_path)
+            save_checkpoint(model, checkpoint_path, normalization)
             record["saved_best"] = True
 
         history.append(record)
@@ -231,6 +234,7 @@ def train_float(
                     {
                         "completed_epochs": epoch + 1,
                         "total_epochs": epochs,
+                        "normalization": normalization,
                         "best_val_prd_percent": best_prd if val_dataset is not None else None,
                         "history": history,
                     },
@@ -309,6 +313,13 @@ def main() -> None:
     parser.add_argument("--records", default=None, help="Comma-separated MIT-BIH record names (default: full list).")
     parser.add_argument("--val-records", default=None, help="Comma-separated record names held out for validation.")
     parser.add_argument("--download-missing", action="store_true", default=True)
+    parser.add_argument(
+        "--normalization",
+        default="noisy_minmax",
+        choices=("clean_oracle", "noisy_minmax", "noisy_robust"),
+        help="Window scaling. Must match what the board runtime does (ecg_board.preprocess); "
+        "clean_oracle uses the clean signal and is NOT deployable.",
+    )
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--num-workers", type=int, default=0)
     args = parser.parse_args()
@@ -331,13 +342,14 @@ def main() -> None:
             patience=args.patience,
             batch_size=args.batch_size,
             num_workers=args.num_workers,
+            normalization=args.normalization,
         )
         print(f"Saved best float checkpoint to {args.checkpoint}")
     else:
-        args.clean_dir = args.clean_dir
+        require_normalization(args.checkpoint, args.normalization)
         train_dataset, _ = build_datasets(args)
         quantized_model = train_qat(args.checkpoint, train_dataset, args.epochs, args.device, args.qat_output_dir)
-        save_checkpoint(quantized_model, args.qat_checkpoint)
+        save_checkpoint(quantized_model, args.qat_checkpoint, args.normalization)
         print(f"Saved QAT checkpoint to {args.qat_checkpoint}")
 
 
